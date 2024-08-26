@@ -30,7 +30,7 @@ def calculate_ratios(image_path, output_dir):
     _, binary = cv2.threshold(gray, 128, 255, cv2.THRESH_BINARY)
 
     # Detect edges to find boundaries
-    edges = cv2.Sobel(gray, ddepth=cv2.CV_64F, dx=1, dy=1, ksize=5) # Combined X and Y Sobel Edge Detection
+    edges = cv2.Sobel(image_copy2, ddepth=cv2.CV_64F, dx=1, dy=1, ksize=5) # Combined X and Y Sobel Edge Detection
     
     # Create output images for object, boundary, and background
     background = np.ones_like(binary) * 255 - binary - edges
@@ -43,15 +43,8 @@ def calculate_ratios(image_path, output_dir):
     cv2.imwrite(os.path.join(output_dir, 'boundary.png'), edges)
     cv2.imwrite(os.path.join(output_dir, 'background.png'), background)
     
-    # Display the images to verify
-    cv2.imshow('Object', image_copy2)
-    cv2.imshow('Boundary', edges)
-    cv2.imshow('Background', background)
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
-
 # Example usage
-image_path = 'Original_Dataset/Lena.jfif'
+image_path = 'Original_Dataset/Lena.png'
 output_dir = 'Original_Dataset'
 
 calculate_ratios(image_path, output_dir)
