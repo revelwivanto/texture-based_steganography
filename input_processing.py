@@ -17,14 +17,18 @@ def create_queue(bit_string):
     for group in groups:
         first_three_bits = group[:3]
         if '000' <= first_three_bits <= '011':
-            queue_sml.put(group)
+            decimal_value = int(group, 2)
+            queue_sml.put(decimal_value)
             queue_map.put(0)
         else:
-            queue_big.put(group)
+            decimal_value = int(group, 2)
+            queue_big.put(decimal_value)
             queue_map.put(1)
     
     return  queue_big, queue_sml, queue_map
 
+
+"""
 # Example usage
 bit_string = "100001010111010111110010001011010101111000111011100011001000010101100101111110111001110101110011001101110100000110000011000000010010111011010010011100100101001011001100000100101101010110010100000011000000101001111101111001011101111100000011100010100011010110011000110011100000"
 queue_big, queue_sml, queue_map = create_queue(bit_string)
@@ -42,3 +46,4 @@ while not queue_sml.empty():
 print("\nQueue Map:")
 while not queue_map.empty():
     print(queue_map.get())
+"""
