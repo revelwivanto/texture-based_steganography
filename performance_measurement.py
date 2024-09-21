@@ -19,7 +19,7 @@ def calculate_ssim(img1, img2):
 def main():
     # Load the old and new images in grayscale mode
     img1 = cv2.imread("Original_Dataset\\old.png", cv2.IMREAD_GRAYSCALE)
-    img2 = cv2.imread("Original_Dataset\\new.png", cv2.IMREAD_GRAYSCALE)
+    img2 = cv2.imread("Compressed_Images\\new10.png", cv2.IMREAD_GRAYSCALE)
     
     # Ensure that both images have the same shape
     if img1.shape != img2.shape:

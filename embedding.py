@@ -8,89 +8,115 @@ import input_processing
 
 class qgdec:
 
-    def __init__(self, im, queue_big, queue_sml, queue_map):
+    def __init__(self, im, queue_vbig, queue_big, queue_sml, queue_vsml, queue_map):
         self.img = im
+        self.queue_vbig = queue_vbig
         self.queue_big = queue_big
         self.queue_sml = queue_sml
+        self.queue_vsml = queue_vsml
         self.queue_map = queue_map
         self.avg_pixel_value = np.average(im)
+        self.total_bits = self.queue_vbig.qsize() + self.queue_big.qsize() + self.queue_sml.qsize() + self.queue_vsml.qsize()
+        self.embedded_bits_count = 0  # Counter for embedded bits
+        self.avg_diff = self.calculate_avg_diff()
+
+    def process_bit(self, pixel1, diff, is_bright):
+        if is_bright:
+            return self._process_bright(pixel1, diff)
+        else:
+            return self._process_dark(pixel1, diff)
+
+    def calculate_avg_diff(self):
+        total_diff = 0
+        count = 0
+        for y in range(self.img.shape[0]):
+            for x in range(0, self.img.shape[1] - 1, 2):  # Step by 2 to get neighboring pixels
+                pixel1 = int(self.img[y, x])  # Fixed to access (y, x) correctly
+                pixel2 = int(self.img[y, x + 1])
+                diff = np.abs(pixel1 - pixel2)
+                total_diff += diff
+                count += 1
+        return total_diff / count if count > 0 else 0
+
+    def _process_bright(self, pixel1, diff):
+        # Use the average difference to determine the embedding logic
+        if diff < self.avg_diff * 0.3:
+            return self._embed_bit(pixel1, self.queue_vsml)
+        elif self.avg_diff * 0.3 <= diff < self.avg_diff * 0.8:
+            return self._embed_bit(pixel1, self.queue_sml)
+        elif self.avg_diff * 1.0 <= diff < self.avg_diff * 1.6:
+            return self._embed_bit(pixel1, self.queue_big)
+        else:
+            return self._embed_bit(pixel1, self.queue_vbig)
+
+    def _process_dark(self, pixel1, diff):
+        # Use the average difference to determine the embedding logic
+        if diff < self.avg_diff * 0.3:
+            return self._embed_bit(pixel1, self.queue_vsml, False)
+        elif self.avg_diff * 0.3 <= diff < self.avg_diff * 0.8:
+            return self._embed_bit(pixel1, self.queue_sml, False)
+        elif self.avg_diff * 1.0 <= diff < self.avg_diff * 1.6:
+            return self._embed_bit(pixel1, self.queue_big, False)
+        else:
+            return self._embed_bit(pixel1, self.queue_vbig, False)
+
+    def _embed_bit(self, pixel1, queue, is_bright=True):
+        if queue.empty():
+            return None
+
+        bit = int(queue.get())
+        if is_bright:
+            kb = pixel1 - (pixel1 % 4)
+            return self._perform_embed_operations(bit, kb)
+        else:
+            ka = pixel1 + abs((pixel1 % 4) - 3)
+            return self._perform_embed_operations(bit, ka, False)
+
+    def _perform_embed_operations(self, bit, pixel_value, is_bright=True):
+        if is_bright:
+            d = self.eq8(bit, pixel_value)
+        else:
+            d = self.eq9(bit, pixel_value)
+        dnew = self.eq10(d)
+        dnewnew = self.eq11(dnew, bit)
+        if is_bright:
+            return self.eq12(dnewnew, pixel_value)
+        else:
+            return self.eq13(dnewnew, pixel_value)
 
     def embed_image(self):
         pixels = self.img
+        is_bright = self.avg_pixel_value > 150
 
-        # Iterate over the image pixels
         for y in range(self.img.shape[0]):
-            for x in range(0, self.img.shape[1] - 1, 2):  # Step by 2 to get neighboring pixels
-                pixel1 = int(pixels[x, y])  # Convert to int to prevent overflow
-                pixel2 = int(pixels[x + 1, y])  # Convert to int to prevent overflow
-                # Calculate the difference between neighboring pixels
+            for x in range(0, self.img.shape[1] - 1, 2):
+                pixel1 = int(pixels[x, y])
+                pixel2 = int(pixels[x + 1, y])
                 diff = np.abs(pixel1 - pixel2)
-                if self.avg_pixel_value > 150:
-                    if diff < 10:
-                        continue  # Do nothing if the difference is less than 128
-                    elif 10 <= diff <= 20:
-                        bit = self.queue_sml.get() if not self.queue_sml.empty() else None
-                        if bit is not None:
-                            bit = int(bit)
-                            kb = pixel1 - (pixel1 % 4)
-                            d = self.eq8(bit, kb)
-                            dnew = self.eq10(d)
-                            dnewnew = self.eq11(dnew, bit)
-                            newpx = self.eq12(dnewnew, kb)
-                            pixels[x, y] = newpx
-                    elif diff > 20:
-                        bit = self.queue_big.get() if not self.queue_big.empty() else None
-                        if bit is not None:
-                            bit = int(bit)
-                            kb = pixel1 - (pixel1 % 4)
-                            d = self.eq8(bit, kb)
-                            dnew = self.eq10(d)
-                            dnewnew = self.eq11(dnew, bit)
-                            newpx = self.eq12(dnewnew, kb)
-                            pixels[x, y] = newpx
-                else:
-                    if diff < 10:
-                        continue  # Do nothing if the difference is less than 128
-                    elif 10 <= diff <= 20:
-                        bit = self.queue_sml.get() if not self.queue_sml.empty() else None
-                        if bit is not None:
-                            bit = int(bit)
-                            ka = pixel1 + abs((pixel1 % 4) - 3)
-                            d = self.eq9(bit, ka)
-                            dnew = self.eq10(d)
-                            dnewnew = self.eq11(dnew, bit)
-                            newpx = self.eq13(dnewnew, ka)
-                            pixels[x, y] = newpx
-                    elif diff > 20:
-                        bit = self.queue_big.get() if not self.queue_big.empty() else None
-                        if bit is not None:
-                            bit = int(bit)
-                            ka = pixel1 + abs((pixel1 % 4) - 3)
-                            d = self.eq9(bit, ka)
-                            dnew = self.eq10(d)
-                            dnewnew = self.eq11(dnew, bit)
-                            newpx = self.eq13(dnewnew, ka)
-                            pixels[x, y] = newpx
+                newpx = self.process_bit(pixel1, diff, is_bright)
 
-        # Convert the pixels into an array using numpy
+            if newpx is not None:
+                pixels[x, y] = np.clip(newpx, 0, 255)
+                self.embedded_bits_count += 8
+
         array = np.array(pixels, dtype=np.uint8)
-
-        # Use PIL to create an image from the new array of pixels
         new_image = Image.fromarray(array)
-        new_image.save('Original_Dataset\\new.png')
+        print("Average difference: ", self.avg_diff)
+        print("queue sizes after embedding: ",self.queue_vbig.qsize(),self.queue_big.qsize(),self.queue_sml.qsize(),self.queue_vsml.qsize())
+        if not self.queue_vbig.empty() or not self.queue_big.empty() or not self.queue_sml.empty() or not self.queue_vsml.empty():
+            print("Some data is still in the queues")
+        else:
+            print("Data embedding complete")
+        new_image.save('Original_Dataset\\new100.png')
 
     @staticmethod
     def eq8(pxval, kb):
         d = pxval - kb 
-        print("pxval",pxval)
-        print(d)
         return d
 
     @staticmethod
     def eq9(pxval, ka):
         d = ka - pxval
-        print("pxval",pxval)
-        print(d)
         return d
 
     @staticmethod
@@ -99,47 +125,19 @@ class qgdec:
             dnew = 0
         else:
             dnew = d - 2 ** math.floor(math.log2(d))
-        print(dnew)
         return dnew
 
     @staticmethod
     def eq11(dnew, bits):
-        dnewnew = 2 * dnew + bits
-        print(dnewnew)
-        return dnewnew
+        return 2 * dnew + bits
 
     @staticmethod
     def eq12(dnewnew, kb):
-        stegpx = dnewnew + kb
-        print("stgpx",stegpx)
-        return stegpx
+        return dnewnew + kb
 
     @staticmethod
     def eq13(dnewnew, ka):
-        stegpx = ka - dnewnew
-        print("stgpx",stegpx)
-        return stegpx
-
-    @staticmethod        
-    def eq14(d):
-        binary_d = bin(d)[2:]
-        return [int(bit) for bit in binary_d]
-
-    @staticmethod        
-    def eq15(d):
-        dnew = math.floor(d / 2)
-        return dnew
-
-    @staticmethod
-    def eq16(LM, pxval):
-        if LM == '00':
-            return 0
-        elif LM == '10':
-            return pxval + 2 ** math.log2(2 * pxval + 1) + 1
-        elif LM == '11':
-            return pxval + 2 ** math.log2(2 * pxval + 1)
-        else:
-            raise ValueError("Invalid LM value. LM should be '00', '10', or '11'.")
+        return ka - dnewnew
 
     def createblock(self):
         # Placeholder method for creating a block, to be implemented
@@ -150,8 +148,7 @@ class qgdec:
         pass
 
 def main():
-    image_path = "Original_Dataset\\Lena.png"
-    # Load the image in grayscale mode
+    image_path = "Original_Dataset\\Pixel ruler.tiff"
     img = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
     cv2.imwrite("Original_Dataset\\old.png", img)
     if img is None:
@@ -160,13 +157,16 @@ def main():
     
     mode = input("Choose mode (embed or extract): ")
     if mode == "embed":
-        bits = input("Enter bits to embed: ")
-        queue_big, queue_sml, queue_map = input_processing.create_queue(bits)
-        qg = qgdec(img, queue_big, queue_sml, queue_map)
+        with open('input_bit\\random-binary_100Kb.txt', 'r') as file:
+            bits = file.read().strip()
+        var = input_processing.calculate_grayscale_image_variance(img)
+        queue_vbig, queue_big, queue_sml, queue_vsml, queue_map = input_processing.create_queue(bits, var)
+        print("queue sizes before embedding: ",queue_vbig.qsize(),queue_big.qsize(),queue_sml.qsize(),queue_vsml.qsize())
+        qg = qgdec(img, queue_vbig, queue_big, queue_sml, queue_vsml, queue_map)
         qg.embed_image()
     elif mode == "extract":
         LM = input("What's the LM: ")
-        qg = qgdec(img, None, None, None)  # Pass None for queues during extraction
+        qg = qgdec(img, None, None, None)  
         block = qg.createblock()
         new_block, bits = qg.extracting(block, LM)
         print(bits)
