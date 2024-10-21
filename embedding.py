@@ -10,6 +10,7 @@ class qgdec:
 
     def __init__(self, im, queue_vbig, queue_big, queue_sml, queue_vsml, queue_map):
         self.img = im
+        self.img_name = os.path.basename(im)
         self.queue_vbig = queue_vbig
         self.queue_big = queue_big
         self.queue_sml = queue_sml
@@ -139,22 +140,58 @@ class qgdec:
     def eq13(dnewnew, ka):
         return ka - dnewnew
 
-    def createblock(self):
-        # Placeholder method for creating a block, to be implemented
-        pass
+    def extracting(self, pixel1, pixel2):
+        # Calculate the difference `d`
+        d = pixel2 - pixel1
 
-    def extracting(self, block, LM):
-        # Placeholder method for extracting data, to be implemented
-        pass
+        # Calculate `d'` (this step is optional if not using it for extraction, depending on algorithm)
+        d_prime = d // 2  # Example: Integer division of `d` by 2
+
+        # Extract the least significant bit (LSB) of `d`
+        extracted_bit = d & 1
+
+        return extracted_bit
+
+    def scan_and_extract(self):
+        pixels = self.img
+        is_bright = self.avg_pixel_value > 150  # Define brightness threshold
+        extracted_bits = []
+
+        for y in range(self.img.shape[0]):
+            for x in range(0, self.img.shape[1] - 1, 2):
+                pixel1 = int(pixels[y, x])
+                pixel2 = int(pixels[y, x + 1])
+                
+                # Extract the bit using the extracting function
+                extracted_bit = self.extracting(pixel1, pixel2)
+                
+                # Append the bit to the list of extracted bits
+                extracted_bits.append(str(extracted_bit))
+
+        # Join the list of bits into a binary string
+        binary_message = ''.join(extracted_bits)
+
+        # Optional: Convert binary message to ASCII (if needed)
+        decoded_message = self.binary_to_ascii(binary_message)
+
+        return decoded_message
+
+    def binary_to_ascii(self, binary_message):
+        # Split the binary string into chunks of 8 bits (1 byte)
+        byte_chunks = [binary_message[i:i+8] for i in range(0, len(binary_message), 8)]
+        
+        # Convert each byte to an ASCII character
+        ascii_message = ''.join([chr(int(byte, 2)) for byte in byte_chunks])
+
+        return ascii_message
 
 def main():
-    image_path = "Original_Dataset\\Pixel ruler.tiff"
+    image_path = "Original_Dataset\\Stream and bridge.tiff"
     img = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
     cv2.imwrite("Original_Dataset\\old.png", img)
     if img is None:
         print(f"Image at path {image_path} could not be found.")
         return
-    
     mode = input("Choose mode (embed or extract): ")
     if mode == "embed":
         with open('input_bit\\random-binary_100Kb.txt', 'r') as file:
@@ -166,9 +203,9 @@ def main():
         qg.embed_image()
     elif mode == "extract":
         LM = input("What's the LM: ")
-        qg = qgdec(img, None, None, None)  
-        block = qg.createblock()
-        new_block, bits = qg.extracting(block, LM)
+        qg = qgdec(img, None, None, None, None, None)
+        qg.scan_and_extract()
+        
         print(bits)
     else:
         print("Invalid mode. Please choose either embed or extract.")
